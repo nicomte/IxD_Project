@@ -22,6 +22,9 @@ class _ArduinoDemoState extends State<ArduinoDemo> {
   }
 
   void _readSerial() async {
+    // MAC:
+    // final file = File('/dev/cu.usbmodem1301');
+    // Linux:
     final file = File('/dev/ttyACM0');
     final stream = file.openRead();
     final lines = stream.transform(utf8.decoder).transform(LineSplitter());
