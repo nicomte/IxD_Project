@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 void main() => runApp(const PlantBuddyApp());
 
@@ -102,9 +104,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _readSerial();
+  //  _readSerial();
+    _testData();
   }
 
+  void _testData() {
+  setState(() {
+    _temperature = 22.5;
+    _humidity = 55.0;
+    _moisture = 48.0;
+    _uv = 65.0;
+  });
+}
+
+
+/* for testing
   void _readSerial() async {
     try {
       final serialPort = File('/dev/ttyACM0');
@@ -127,7 +141,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       print("Serial Port not found");
     }
-  }
+  } */
 
   String _fmt(double? v, String unit) =>
       v == null ? '—' : '${v.toStringAsFixed(0)}$unit';
@@ -161,8 +175,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             color: Colors.red),
                       ),
                     ),
-                    const Text('🪴', style: TextStyle(fontSize: 40)),
-                  ],
+                        const SizedBox(width: 16),
+                        const AnimatedPlantWidget(size: 150),
+                        ],
                 ),
 
                 const Divider(color: Colors.red, thickness: 2),
@@ -350,4 +365,161 @@ class PlantInfoCard extends StatelessWidget {
                   const TextStyle(fontSize: 11, color: Colors.black54)),
         ]),
       );
+}
+
+class AnimatedPlantWidget extends StatefulWidget {
+  const AnimatedPlantWidget({super.key, this.size = 80});
+
+  final double size;
+
+  @override
+  State<AnimatedPlantWidget> createState() => _AnimatedPlantWidgetState();
+}
+
+class _AnimatedPlantWidgetState extends State<AnimatedPlantWidget>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 6))
+          ..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.size,
+      height: widget.size,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: _PlantPainter(animationValue: _controller.value),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PlantPainter extends CustomPainter {
+  final double animationValue;
+
+  _PlantPainter({required this.animationValue});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint();
+    final centerX = size.width / 2;
+    final potTop = size.height * 0.65;
+
+    // Hintergrund (transparent bleibt, Canvas default)
+    // Pot
+    final potWidth = size.width * 0.5;
+    final potHeight = size.height * 0.2;
+    final potX = centerX - potWidth / 2;
+    final potY = potTop;
+
+    final bob = math.sin(animationValue * 2 * math.pi * 0.8) * 2;
+
+    paint.color = const Color(0xFFA6592C);
+    canvas.drawRect(
+      Rect.fromLTWH(potX, potY + bob, potWidth, potHeight),
+      paint,
+    );
+
+    paint.color = const Color(0xFF7C3E1C);
+    canvas.drawRect(
+      Rect.fromLTWH(potX, potY + potHeight - 6 + bob, potWidth, 6),
+      paint,
+    );
+
+    paint.color = const Color(0xFFCF906F);
+    canvas.drawRect(
+      Rect.fromLTWH(potX + 6, potY - 8 + bob, potWidth - 12, 8),
+      paint,
+    );
+
+    final stemHeight = size.height * 0.5;
+    final sway = math.sin(animationValue * 2 * math.pi * 0.6) * 10;
+    final stretch = math.cos(animationValue * 2 * math.pi * 0.15) * 4;
+
+    canvas.save();
+    canvas.translate(centerX, potY);
+    canvas.rotate(sway * 0.35 * math.pi / 180);
+    paint.color = const Color(0xFF5B8A4D);
+    canvas.drawRect(
+      Rect.fromLTWH(-3, -stemHeight, 6, stemHeight + stretch),
+      paint,
+    );
+
+    for (var i = 0; i < 4; i++) {
+      final levelY = -i * 20.0 - 20;
+      final wave = math.sin(animationValue * 2 * math.pi * 0.9 + i) * (10 - i * 1.2);
+      _drawLeaf(canvas, paint, levelY, wave, i % 2 == 0);
+    }
+    canvas.restore();
+
+    _drawFlower(
+      canvas,
+      Offset(centerX + sway * 0.35, potY - stemHeight - 10 + stretch * 0.2),
+      sway,
+      animationValue,
+    );
+  }
+
+  void _drawLeaf(Canvas canvas, Paint paint, double y, double sway, bool flip) {
+    final leafW = 30.0;
+    final leafH = 10.0;
+    final offset = flip ? -leafW : 0;
+    paint.color = const Color(0xFF8AAE73);
+
+    final path = Path()
+      ..moveTo(offset.toDouble(), y)
+      ..lineTo(offset + leafW, y - 5)
+      ..lineTo(offset + leafW + sway * 0.5, y + leafH)
+      ..lineTo(offset + sway * 0.5, y + leafH + 5)
+      ..close();
+
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawFlower(
+      Canvas canvas, Offset center, double sway, double animationValue) {
+    final paint = Paint();
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(sway * 0.35 * math.pi / 180);
+    final pulse = ui.lerpDouble(0.9, 1.1, (math.sin(animationValue * 2 * math.pi * 0.12) * 0.5 + 0.5))!;
+    paint.color = const Color(0xFFF8E4A0);
+
+    for (var i = 0; i < 6; i++) {
+      canvas.rotate(math.pi / 3);
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: const Offset(12, 5),
+          width: 18 * pulse,
+          height: 8 * pulse,
+        ),
+        paint,
+      );
+    }
+
+    paint.color = const Color(0xFFF15B5B);
+    canvas.drawCircle(Offset.zero, 4 * pulse, paint);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _PlantPainter oldDelegate) =>
+      oldDelegate.animationValue != animationValue;
 }
