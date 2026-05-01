@@ -95,53 +95,88 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // ── Mutable state: only sensor readings + connection ──
   double? _temperature;
   double? _humidity;
   double? _moisture;
   double? _uv;
 
+  IOSink? _portSink;
+  DateTime? _lastServoTrigger;
+  static const _servoCooldown = Duration(seconds: 30); // adjust as needed
+
   @override
   void initState() {
     super.initState();
-  //  _readSerial();
+    //_readSerial();
     _testData();
   }
 
+  @override
+  void dispose() {
+    _portSink?.close();
+    super.dispose();
+  }
+
   void _testData() {
-  setState(() {
-    _temperature = 22.5;
-    _humidity = 55.0;
-    _moisture = 48.0;
-    _uv = 65.0;
-  });
-}
-
-
-/* for testing
+    setState(() {
+      _temperature = 22.5;
+      _humidity = 55.0;
+      _moisture = 48.0;
+      _uv = 65.0;
+    });
+  }
+/*
   void _readSerial() async {
-    try {
-      final serialPort = File('/dev/ttyACM0');
+  try {
+    final serialPort = File('/dev/ttyACM0');
 
-      final stream = serialPort.openRead();
-      final lines = stream.transform(utf8.decoder).transform(const LineSplitter());
+    // Open a write sink separately using dart:io's openWrite
+    _portSink = serialPort.openWrite(mode: FileMode.write);
 
-      await for (final line in lines) {
-        try {
-          final json = jsonDecode(line);
-          
-          setState(() {
-            _temperature = (json['temp'] as num?)?.toDouble();
-            _humidity    = (json['humi'] as num?)?.toDouble();
-            _moisture    = (json['moisture'] as num?)?.toDouble();
-            _uv          = (json['uv'] as num?)?.toDouble();
-          });
-        } catch (_) {}
+    // Read stream as before
+    final stream = serialPort.openRead();
+    final lines = stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter());
+
+    await for (final line in lines) {
+      try {
+        if (line.trim().isEmpty) continue;
+        final json = jsonDecode(line);
+        setState(() {
+          _temperature = (json['temp']     as num?)?.toDouble();
+          _humidity    = (json['humi']     as num?)?.toDouble();
+          _moisture    = (json['moisture'] as num?)?.toDouble();
+          _uv          = (json['uv']       as num?)?.toDouble();
+        });
+
+      final minMoisture = plantParamsList[0].minMoisture;
+      if (_moisture != null && _moisture! < minMoisture) {
+        final now = DateTime.now();
+        if (_lastServoTrigger == null ||
+            now.difference(_lastServoTrigger!) > _servoCooldown) {
+          _lastServoTrigger = now;
+          _triggerServo();
+        }
+      } else {
+        _lastServoTrigger = null; // reset when moisture recovers
       }
-    } catch (e) {
-      print("Serial Port not found");
+
+      } catch (e) {
+        print('Failed to parse line: $e');
+      }
     }
-  } */
+  } catch (e) {
+    print('Serial error: $e');
+  }
+}
+*/
+Future<void> _triggerServo() async {
+  if (_portSink == null) return;
+  _portSink!.write('SERVO\n');
+  print("command sent");
+  await _portSink!.flush(); // ensure it's sent immediately
+}
 
   String _fmt(double? v, String unit) =>
       v == null ? '—' : '${v.toStringAsFixed(0)}$unit';
